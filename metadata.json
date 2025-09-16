@@ -1,0 +1,6 @@
+{
+  "name": "AgenticMind",
+  "description": "An application to explore and utilize five powerful agentic AI patterns for more reliable and robust problem-solving with LLMs. Interact with Reflection, Tool Use, ReAct, Planning, and Multi-Agent collaboration patterns.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
