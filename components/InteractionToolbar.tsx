@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LogEntry, AgenticPattern, UserLogEntry, AILogEntry, SystemLogEntry, ThoughtLogEntry, ActionLogEntry, PlanLogEntry, ToolCallLogEntry, ToolResultLogEntry, AgentMessageLogEntry, ErrorLogEntry } from '../types';
 import { CopyIcon } from './icons/CopyIcon';
@@ -61,7 +60,6 @@ interface InteractionToolbarProps {
 export const InteractionToolbar: React.FC<InteractionToolbarProps> = ({ logEntries, selectedPattern }) => {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     
-    // Don't render if there are no logs or only the initial API key error
     if (logEntries.length === 0 || (logEntries.length === 1 && logEntries[0].id === 'api-key-error')) {
         return null;
     }
@@ -91,7 +89,7 @@ export const InteractionToolbar: React.FC<InteractionToolbarProps> = ({ logEntri
         <div className="flex items-center justify-end gap-2 px-4 pt-4 max-w-4xl mx-auto w-full">
             <button 
                 onClick={handleCopy}
-                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-md transition-all"
+                className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 px-3 py-1.5 rounded-md transition-all"
                 aria-label="Copy conversation to clipboard"
             >
                 <CopyIcon className="w-4 h-4" />
@@ -99,7 +97,7 @@ export const InteractionToolbar: React.FC<InteractionToolbarProps> = ({ logEntri
             </button>
             <button
                 onClick={handleExport}
-                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-md transition-all"
+                className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 px-3 py-1.5 rounded-md transition-all"
                 aria-label="Export conversation as Markdown"
             >
                 <ExportIcon className="w-4 h-4" />

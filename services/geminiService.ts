@@ -1,6 +1,6 @@
-
 import { GoogleGenAI, Type, Chat, GenerateContentResponse, Content } from "@google/genai";
 import { AgenticPattern, LogEntry, GroundingChunk } from '../types';
+import { GlobalSettings, AllPatternSettings } from '../settings';
 
 let ai: GoogleGenAI | null = null;
 
@@ -22,24 +22,31 @@ export const runAgenticPattern = async (
     pattern: AgenticPattern,
     prompt: string,
     streamCallback: StreamCallback,
-    maxIterations: number
+    globalSettings: GlobalSettings,
+    patternSettings: AllPatternSettings
 ): Promise<void> => {
     try {
+        const commonConfig = {
+            temperature: globalSettings.temperature,
+            topK: globalSettings.topK,
+            topP: globalSettings.topP,
+        };
+
         switch (pattern) {
             case AgenticPattern.Reflection:
-                await runReflection(prompt, streamCallback);
+                await runReflection(prompt, streamCallback, commonConfig, patternSettings.Reflection);
                 break;
             case AgenticPattern.ToolUse:
-                await runToolUse(prompt, streamCallback);
+                await runToolUse(prompt, streamCallback, commonConfig);
                 break;
             case AgenticPattern.ReAct:
-                await runReAct(prompt, streamCallback, maxIterations);
+                await runReAct(prompt, streamCallback, commonConfig, patternSettings.ReAct);
                 break;
             case AgenticPattern.Planning:
-                await runPlanning(prompt, streamCallback);
+                await runPlanning(prompt, streamCallback, commonConfig, patternSettings.Planning);
                 break;
             case AgenticPattern.MultiAgent:
-                await runMultiAgent(prompt, streamCallback, maxIterations);
+                await runMultiAgent(prompt, streamCallback, commonConfig, patternSettings.MultiAgent);
                 break;
         }
     } catch (error) {
@@ -49,38 +56,28 @@ export const runAgenticPattern = async (
     }
 };
 
-const runReflection = async (prompt: string, cb: StreamCallback) => {
+const runReflection = async (prompt: string, cb: StreamCallback, config: any, settings: AllPatternSettings['Reflection']) => {
     const ai = getAI();
     cb({ id: generateId(), type: 'system', content: `Starting Reflection pattern...`, pattern: AgenticPattern.Reflection });
 
-    // Step 1: Initial Generation
     cb({ id: generateId(), type: 'system', content: `Generating initial response...`, pattern: AgenticPattern.Reflection });
     const initialResult = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt
+        contents: prompt,
+        config,
     });
     const initialResponse = initialResult.text;
     cb({ id: generateId(), type: 'ai', content: `Initial Draft:\n\n${initialResponse}` });
 
-    // Step 2: Reflection and Refinement
     cb({ id: generateId(), type: 'system', content: `Reflecting on the draft and refining...`, pattern: AgenticPattern.Reflection });
-    const reflectionPrompt = `
-      You are an expert critic. Review the following prompt and the response.
-      Identify any flaws, omissions, or areas for improvement. Then, provide a final, improved version.
-      
-      Original Prompt: "${prompt}"
-      
-      Initial Response:
-      ---
-      ${initialResponse}
-      ---
-      
-      Your reflection and final, improved response:
-    `;
+    const reflectionPrompt = settings.refinementPrompt
+        .replace('{prompt}', prompt)
+        .replace('{initialResponse}', initialResponse);
 
     const streamingResult = await ai.models.generateContentStream({
         model: 'gemini-2.5-flash',
-        contents: reflectionPrompt
+        contents: reflectionPrompt,
+        config
     });
     
     let finalContent = '';
@@ -90,7 +87,7 @@ const runReflection = async (prompt: string, cb: StreamCallback) => {
     }
 };
 
-const runToolUse = async (prompt: string, cb: StreamCallback) => {
+const runToolUse = async (prompt: string, cb: StreamCallback, config: any) => {
     const ai = getAI();
     cb({ id: generateId(), type: 'system', content: `Starting Tool Use pattern with Google Search...`, pattern: AgenticPattern.ToolUse });
     cb({ id: generateId(), type: 'tool-call', toolName: 'Google Search', input: prompt });
@@ -98,9 +95,7 @@ const runToolUse = async (prompt: string, cb: StreamCallback) => {
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
-        config: {
-            tools: [{ googleSearch: {} }]
-        }
+        config: { ...config, tools: [{ googleSearch: {} }] }
     });
     
     const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
@@ -109,41 +104,23 @@ const runToolUse = async (prompt: string, cb: StreamCallback) => {
     cb({ id: generateId(), type: 'tool-result', toolName: 'Google Search', output: result.text, sources });
 };
 
-const runReAct = async (prompt: string, cb: StreamCallback, maxIterations: number) => {
+const runReAct = async (prompt: string, cb: StreamCallback, config: any, settings: AllPatternSettings['ReAct']) => {
     const ai = getAI();
-    cb({ id: generateId(), type: 'system', content: `Starting ReAct pattern with a max of ${maxIterations} loops...`, pattern: AgenticPattern.ReAct });
-
-    const systemInstruction = `You are a helpful assistant that solves problems by breaking them down into a sequence of Thought-Action-Observation. Your goal is to answer the user's request.
-
-You have two actions available:
-1.  \`googleSearch(query: string)\`: Use this to find current information or data from the web.
-2.  \`finish(answer: string)\`: Use this when you have enough information to provide the final answer to the user.
-
-You must respond with a JSON object containing "thought" and "action". The action string must be either a \`googleSearch\` call or a \`finish\` call.
-
-Example:
-User: What is the weather in London?
-You:
-\`\`\`json
-{
-  "thought": "I need to find the current weather in London. I will use Google Search.",
-  "action": "googleSearch(\\"weather in London\\")"
-}
-\`\`\`
-`;
+    cb({ id: generateId(), type: 'system', content: `Starting ReAct pattern with a max of ${settings.maxIterations} loops...`, pattern: AgenticPattern.ReAct });
 
     let history: Content[] = [
         { role: 'user', parts: [{ text: prompt }] }
     ];
 
-    for (let i = 0; i < maxIterations; i++) {
-        cb({ id: generateId(), type: 'system', content: `Iteration ${i + 1} of ${maxIterations}...`, pattern: AgenticPattern.ReAct });
+    for (let i = 0; i < settings.maxIterations; i++) {
+        cb({ id: generateId(), type: 'system', content: `Iteration ${i + 1} of ${settings.maxIterations}...`, pattern: AgenticPattern.ReAct });
         
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: history,
             config: {
-                systemInstruction,
+                ...config,
+                systemInstruction: settings.systemInstruction,
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
@@ -188,7 +165,7 @@ You:
                 const searchResult = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: query,
-                    config: { tools: [{ googleSearch: {} }] }
+                    config: { ...config, tools: [{ googleSearch: {} }] }
                 });
 
                 const observation = searchResult.text;
@@ -210,16 +187,16 @@ You:
 };
 
 
-const runPlanning = async (prompt: string, cb: StreamCallback) => {
+const runPlanning = async (prompt: string, cb: StreamCallback, config: any, settings: AllPatternSettings['Planning']) => {
     const ai = getAI();
     cb({ id: generateId(), type: 'system', content: `Starting Planning pattern...`, pattern: AgenticPattern.Planning });
 
-    // Step 1: Generate Plan
-    const planPrompt = `Create a step-by-step plan to address the following request. Do not execute the plan, just create it. Request: "${prompt}"`;
+    const planPrompt = settings.planningPrompt.replace('{prompt}', prompt);
     const planResult = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: planPrompt,
         config: {
+            ...config,
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.OBJECT,
@@ -236,50 +213,44 @@ const runPlanning = async (prompt: string, cb: StreamCallback) => {
     const { plan } = JSON.parse(planResult.text);
     cb({ id: generateId(), type: 'plan', steps: plan, completedSteps: [] });
 
-    // Step 2: Execute Plan
     cb({ id: generateId(), type: 'system', content: `Executing the plan...`, pattern: AgenticPattern.Planning });
-    const executionPrompt = `
-      Given the following plan, provide a comprehensive response that fulfills all the steps.
-      Plan:
-      ${plan.map((step: string, i: number) => `${i + 1}. ${step}`).join('\n')}
-      
-      User's original request: "${prompt}"
-      
-      Now, execute the plan and provide the final result.
-    `;
+    const planString = plan.map((step: string, i: number) => `${i + 1}. ${step}`).join('\n');
+    const executionPrompt = settings.executionPrompt
+        .replace('{plan}', planString)
+        .replace('{prompt}', prompt);
+
     const executionResult = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: executionPrompt,
+        config,
     });
     cb({ id: generateId(), type: 'ai', content: executionResult.text });
 };
 
-const runMultiAgent = async (prompt: string, cb: StreamCallback, maxIterations: number) => {
+const runMultiAgent = async (prompt: string, cb: StreamCallback, config: any, settings: AllPatternSettings['MultiAgent']) => {
     const ai = getAI();
-    cb({ id: generateId(), type: 'system', content: `Starting Multi-Agent Collaboration with a max of ${maxIterations} review rounds...`, pattern: AgenticPattern.MultiAgent });
+    cb({ id: generateId(), type: 'system', content: `Starting Multi-Agent Collaboration with a max of ${settings.maxIterations} review rounds...`, pattern: AgenticPattern.MultiAgent });
 
     const agents = {
         Coder: {
             name: 'Coder Agent',
-            systemInstruction: 'You are a proficient software developer. Write clean, efficient code to meet the user\'s request. Provide only the code in a markdown block. When revising, incorporate the feedback provided fully and provide the complete, updated code.'
+            systemInstruction: settings.coderSystemInstruction
         },
         Reviewer: {
             name: 'Reviewer Agent',
-            systemInstruction: `You are a senior code reviewer. Your job is to critique the code provided. 
-If the code is good and meets the requirements, respond with a JSON object: \`{"approved": true, "comment": "The code looks great!"}\`.
-If the code has issues, provide constructive feedback in a JSON object: \`{"approved": false, "comment": "Your detailed feedback here..."}\`.
-Do not write code yourself. Only provide the JSON response.`
+            systemInstruction: settings.reviewerSystemInstruction
         }
     };
 
     const coderChat: Chat = ai.chats.create({
         model: 'gemini-2.5-flash',
-        config: { systemInstruction: agents.Coder.systemInstruction }
+        config: { ...config, systemInstruction: agents.Coder.systemInstruction }
     });
 
     const reviewerChat: Chat = ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
+            ...config,
             systemInstruction: agents.Reviewer.systemInstruction,
             responseMimeType: 'application/json',
             responseSchema: {
@@ -293,16 +264,14 @@ Do not write code yourself. Only provide the JSON response.`
         }
     });
 
-    // Turn 1: Coder writes initial code
     cb({ id: generateId(), type: 'system', content: `Coder Agent is generating the initial code...`, pattern: AgenticPattern.MultiAgent });
     let coderResponse: GenerateContentResponse = await coderChat.sendMessage({ message: prompt });
     let currentCode = coderResponse.text;
     cb({ id: generateId(), type: 'agent-message', agentName: agents.Coder.name, content: currentCode });
 
-    for (let i = 0; i < maxIterations; i++) {
-        cb({ id: generateId(), type: 'system', content: `Review round ${i + 1} of ${maxIterations}...`, pattern: AgenticPattern.MultiAgent });
+    for (let i = 0; i < settings.maxIterations; i++) {
+        cb({ id: generateId(), type: 'system', content: `Review round ${i + 1} of ${settings.maxIterations}...`, pattern: AgenticPattern.MultiAgent });
         
-        // Turn 2: Reviewer critiques code
         cb({ id: generateId(), type: 'system', content: `Reviewer Agent is critiquing the code...`, pattern: AgenticPattern.MultiAgent });
         let reviewerResponse: GenerateContentResponse;
         try {
@@ -320,12 +289,10 @@ Do not write code yourself. Only provide the JSON response.`
             return;
         }
 
-        if (i === maxIterations - 1) {
-            // Last iteration and not approved, so we break here before the next Coder step.
+        if (i === settings.maxIterations - 1) {
             break;
         }
 
-        // Turn 3: Coder revises code
         cb({ id: generateId(), type: 'system', content: `Coder Agent is revising based on feedback...`, pattern: AgenticPattern.MultiAgent });
         coderResponse = await coderChat.sendMessage({ message: `Incorporate this feedback into the original code. Provide the complete, revised code.\n\nFeedback:\n${review.comment}` });
         currentCode = coderResponse.text;

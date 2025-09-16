@@ -51,7 +51,8 @@ export interface ToolCallLogEntry extends BaseLogEntry {
 }
 
 export interface GroundingChunk {
-  web: {
+  // FIX: Made the 'web' property optional to match the @google/genai library type.
+  web?: {
     uri?: string;
     title?: string;
   };

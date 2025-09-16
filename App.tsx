@@ -1,11 +1,12 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PatternSelector } from './components/PatternSelector';
 import { PromptInput } from './components/PromptInput';
 import { InteractionView } from './components/InteractionView';
+import { SettingsModal } from './components/SettingsModal';
 import { AgenticPattern, LogEntry } from './types';
 import { runAgenticPattern } from './services/geminiService';
+import { GlobalSettings, AllPatternSettings, DEFAULT_GLOBAL_SETTINGS, DEFAULT_PATTERN_SETTINGS } from './settings';
 
 interface PatternState {
   logEntries: LogEntry[];
@@ -28,9 +29,20 @@ const App: React.FC = () => {
   const [patternStates, setPatternStates] = useState<Record<AgenticPattern, PatternState>>(initialStates);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<boolean>(false);
-  const [maxIterations, setMaxIterations] = useState<number>(3);
   
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<AgenticPattern | 'global'>('global');
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
+  const [patternSettings, setPatternSettings] = useState<AllPatternSettings>(DEFAULT_PATTERN_SETTINGS);
+
   const currentPatternState = patternStates[selectedPattern];
+  
+  useEffect(() => {
+      // Theme handler
+      const root = window.document.documentElement;
+      root.classList.remove('light', 'dark');
+      root.classList.add(globalSettings.theme);
+  }, [globalSettings.theme]);
 
   useEffect(() => {
     if (!process.env.API_KEY) {
@@ -40,7 +52,6 @@ const App: React.FC = () => {
         type: 'error',
         content: 'CRITICAL: Gemini API Key is not configured. Please set the API_KEY environment variable.'
       };
-      // Set error message for all patterns
       const errorStates = Object.keys(patternStates).reduce((acc, pattern) => {
           acc[pattern as AgenticPattern] = { ...initialPatternState(), logEntries: [errorEntry] };
           return acc;
@@ -48,6 +59,11 @@ const App: React.FC = () => {
       setPatternStates(errorStates);
     }
   }, []);
+
+  const handleOpenSettings = (tab: AgenticPattern | 'global' = 'global') => {
+      setSettingsInitialTab(tab);
+      setIsSettingsOpen(true);
+  }
 
   const handlePatternSelect = (pattern: AgenticPattern) => {
     if (!isLoading) {
@@ -69,11 +85,9 @@ const App: React.FC = () => {
     setPatternStates(prev => {
         const currentEntries = prev[selectedPattern].logEntries;
         let newEntries;
-        // For streaming content, update the last entry if it's the same type.
-        // This creates the effect of the text being "streamed" into one message box.
         if (entry.type === 'ai' && currentEntries.length > 0 && currentEntries[currentEntries.length - 1]?.type === 'ai') {
             newEntries = [...currentEntries];
-            newEntries[newEntries.length - 1] = entry; // Replace the last entry with the new one
+            newEntries[newEntries.length - 1] = entry;
         } else {
              newEntries = [...currentEntries, entry];
         }
@@ -95,7 +109,6 @@ const App: React.FC = () => {
     setIsLoading(true);
     const userEntry: LogEntry = { id: Date.now().toString(), type: 'user', content: prompt };
     
-    // Replace current log with just the new user prompt to start a new session
     setPatternStates(prev => ({
         ...prev,
         [selectedPattern]: {
@@ -105,7 +118,7 @@ const App: React.FC = () => {
     }));
 
     try {
-      await runAgenticPattern(selectedPattern, prompt, streamCallback, maxIterations);
+      await runAgenticPattern(selectedPattern, prompt, streamCallback, globalSettings, patternSettings);
     } catch (error) {
       console.error(error);
       const errorEntry: LogEntry = { 
@@ -113,26 +126,23 @@ const App: React.FC = () => {
         type: 'error', 
         content: error instanceof Error ? error.message : 'An unexpected error occurred.'
       };
-      // Use callback to add error to the log
       streamCallback(errorEntry);
     } finally {
       setIsLoading(false);
-      // Clear prompt for the current pattern after submission
       handlePromptChange('');
     }
   };
   
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-gray-100 font-sans">
-      <Header />
+    <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans">
+      <Header onOpenSettings={() => handleOpenSettings('global')} />
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-shrink-0">
           <PatternSelector 
             selectedPattern={selectedPattern} 
             onSelectPattern={handlePatternSelect}
             isLoading={isLoading}
-            maxIterations={maxIterations}
-            onMaxIterationsChange={setMaxIterations}
+            onConfigurePattern={(pattern) => handleOpenSettings(pattern)}
           />
         </div>
         <InteractionView logEntries={currentPatternState.logEntries} isLoading={isLoading} selectedPattern={selectedPattern} />
@@ -146,6 +156,15 @@ const App: React.FC = () => {
           />
         </div>
       </div>
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        globalSettings={globalSettings}
+        onGlobalSettingsChange={setGlobalSettings}
+        patternSettings={patternSettings}
+        onPatternSettingsChange={setPatternSettings}
+        initialTab={settingsInitialTab}
+      />
     </div>
   );
 };
