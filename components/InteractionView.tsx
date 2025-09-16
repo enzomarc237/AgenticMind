@@ -4,17 +4,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { LogEntry, PlanLogEntry, ToolResultLogEntry, AgentMessageLogEntry } from '../types';
+import { LogEntry, PlanLogEntry, ToolResultLogEntry, AgentMessageLogEntry, AgenticPattern } from '../types';
 import { ReflectionIcon } from './icons/ReflectionIcon';
 import { ToolUseIcon } from './icons/ToolUseIcon';
 import { ReActIcon } from './icons/ReActIcon';
 import { PlanningIcon } from './icons/PlanningIcon';
 import { MultiAgentIcon } from './icons/MultiAgentIcon';
 import { LoadingSpinner } from './LoadingSpinner';
+import { InteractionToolbar } from './InteractionToolbar';
 
 interface InteractionViewProps {
   logEntries: LogEntry[];
   isLoading: boolean;
+  selectedPattern: AgenticPattern;
 }
 
 const EntryIcon: React.FC<{ type: LogEntry['type'] }> = ({ type }) => {
@@ -116,7 +118,7 @@ const EntryCard: React.FC<{ children: React.ReactNode; entry: LogEntry; }> = ({ 
   );
 };
 
-export const InteractionView: React.FC<InteractionViewProps> = ({ logEntries, isLoading }) => {
+export const InteractionView: React.FC<InteractionViewProps> = ({ logEntries, isLoading, selectedPattern }) => {
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -182,19 +184,22 @@ export const InteractionView: React.FC<InteractionViewProps> = ({ logEntries, is
   };
 
   return (
-    <div className="flex-1 p-4 overflow-y-auto bg-gray-900/50">
-      <div className="space-y-4 max-w-4xl mx-auto">
-        {logEntries.map((entry) => (
-          <div key={entry.id}>{renderLogEntry(entry)}</div>
-        ))}
-        {isLoading && (
-          <div className="flex items-center space-x-3 p-4">
-            <LoadingSpinner className="w-6 h-6 text-purple-400" />
-            <span className="text-gray-400 animate-pulse">Agent is thinking...</span>
-          </div>
-        )}
+    <div className="flex-1 flex flex-col min-h-0 bg-gray-900/50">
+       <InteractionToolbar logEntries={logEntries} selectedPattern={selectedPattern} />
+      <div className="flex-1 p-4 pt-0 overflow-y-auto">
+        <div className="space-y-4 max-w-4xl mx-auto">
+          {logEntries.map((entry) => (
+            <div key={entry.id}>{renderLogEntry(entry)}</div>
+          ))}
+          {isLoading && (
+            <div className="flex items-center space-x-3 p-4">
+              <LoadingSpinner className="w-6 h-6 text-purple-400" />
+              <span className="text-gray-400 animate-pulse">Agent is thinking...</span>
+            </div>
+          )}
+          <div ref={endOfMessagesRef} />
+        </div>
       </div>
-      <div ref={endOfMessagesRef} />
     </div>
   );
 };

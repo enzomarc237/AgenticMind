@@ -7,51 +7,102 @@ import { InteractionView } from './components/InteractionView';
 import { AgenticPattern, LogEntry } from './types';
 import { runAgenticPattern } from './services/geminiService';
 
+interface PatternState {
+  logEntries: LogEntry[];
+  prompt: string;
+}
+
+const initialPatternState: () => PatternState = () => ({
+  logEntries: [],
+  prompt: '',
+});
+
+const initialStates = Object.values(AgenticPattern).reduce((acc, pattern) => {
+  acc[pattern] = initialPatternState();
+  return acc;
+}, {} as Record<AgenticPattern, PatternState>);
+
+
 const App: React.FC = () => {
   const [selectedPattern, setSelectedPattern] = useState<AgenticPattern>(AgenticPattern.Reflection);
-  const [prompt, setPrompt] = useState<string>('');
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [patternStates, setPatternStates] = useState<Record<AgenticPattern, PatternState>>(initialStates);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<boolean>(false);
   const [maxIterations, setMaxIterations] = useState<number>(3);
+  
+  const currentPatternState = patternStates[selectedPattern];
 
   useEffect(() => {
     if (!process.env.API_KEY) {
       setApiKeyError(true);
-      setLogEntries([{
+      const errorEntry: LogEntry = {
         id: 'api-key-error',
         type: 'error',
         content: 'CRITICAL: Gemini API Key is not configured. Please set the API_KEY environment variable.'
-      }]);
+      };
+      // Set error message for all patterns
+      const errorStates = Object.keys(patternStates).reduce((acc, pattern) => {
+          acc[pattern as AgenticPattern] = { ...initialPatternState(), logEntries: [errorEntry] };
+          return acc;
+      }, {} as Record<AgenticPattern, PatternState>);
+      setPatternStates(errorStates);
     }
   }, []);
 
   const handlePatternSelect = (pattern: AgenticPattern) => {
     if (!isLoading) {
       setSelectedPattern(pattern);
-      setLogEntries([]);
-      setPrompt('');
     }
+  };
+  
+  const handlePromptChange = (newPrompt: string) => {
+    setPatternStates(prev => ({
+        ...prev,
+        [selectedPattern]: {
+            ...prev[selectedPattern],
+            prompt: newPrompt,
+        }
+    }));
   };
 
   const streamCallback = useCallback((entry: LogEntry) => {
-    setLogEntries(prevEntries => {
-      // For streaming content, update the last entry if it's the same type
-      if (entry.type === 'ai' && prevEntries[prevEntries.length - 1]?.type === 'ai') {
-        const newEntries = [...prevEntries];
-        newEntries[newEntries.length - 1] = entry;
-        return newEntries;
-      }
-      return [...prevEntries, entry];
+    setPatternStates(prev => {
+        const currentEntries = prev[selectedPattern].logEntries;
+        let newEntries;
+        // For streaming content, update the last entry if it's the same type.
+        // This creates the effect of the text being "streamed" into one message box.
+        if (entry.type === 'ai' && currentEntries.length > 0 && currentEntries[currentEntries.length - 1]?.type === 'ai') {
+            newEntries = [...currentEntries];
+            newEntries[newEntries.length - 1] = entry; // Replace the last entry with the new one
+        } else {
+             newEntries = [...currentEntries, entry];
+        }
+        
+        return {
+            ...prev,
+            [selectedPattern]: {
+                ...prev[selectedPattern],
+                logEntries: newEntries
+            }
+        };
     });
-  }, []);
+}, [selectedPattern]);
 
   const handleSubmit = async () => {
+    const prompt = currentPatternState.prompt;
     if (!prompt.trim() || isLoading || apiKeyError) return;
 
     setIsLoading(true);
     const userEntry: LogEntry = { id: Date.now().toString(), type: 'user', content: prompt };
-    setLogEntries([userEntry]);
+    
+    // Replace current log with just the new user prompt to start a new session
+    setPatternStates(prev => ({
+        ...prev,
+        [selectedPattern]: {
+            ...prev[selectedPattern],
+            logEntries: [userEntry]
+        }
+    }));
 
     try {
       await runAgenticPattern(selectedPattern, prompt, streamCallback, maxIterations);
@@ -62,10 +113,12 @@ const App: React.FC = () => {
         type: 'error', 
         content: error instanceof Error ? error.message : 'An unexpected error occurred.'
       };
-      setLogEntries(prev => [...prev, errorEntry]);
+      // Use callback to add error to the log
+      streamCallback(errorEntry);
     } finally {
       setIsLoading(false);
-      setPrompt('');
+      // Clear prompt for the current pattern after submission
+      handlePromptChange('');
     }
   };
   
@@ -82,11 +135,11 @@ const App: React.FC = () => {
             onMaxIterationsChange={setMaxIterations}
           />
         </div>
-        <InteractionView logEntries={logEntries} isLoading={isLoading} />
+        <InteractionView logEntries={currentPatternState.logEntries} isLoading={isLoading} selectedPattern={selectedPattern} />
         <div className="flex-shrink-0">
           <PromptInput
-            prompt={prompt}
-            onPromptChange={setPrompt}
+            prompt={currentPatternState.prompt}
+            onPromptChange={handlePromptChange}
             onSubmit={handleSubmit}
             isLoading={isLoading || apiKeyError}
             selectedPattern={selectedPattern}
