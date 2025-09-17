@@ -1,0 +1,20 @@
+[package]
+name = "agenticmind"
+version = "0.1.0"
+description = "AgenticMind Desktop"
+authors = ["You"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.60"
+
+[build-dependencies]
+tauri-build = { version = "1.5.2", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "1.6.8", features = [] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

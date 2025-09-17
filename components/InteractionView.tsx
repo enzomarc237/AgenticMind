@@ -3,7 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { LogEntry, PlanLogEntry, ToolResultLogEntry, AgentMessageLogEntry, AgenticPattern } from '../types';
+import { LogEntry, AgenticPattern } from '../types';
+import { ThoughtEntry } from './logEntries/ThoughtEntry';
+import { ToolCallEntry } from './logEntries/ToolCallEntry';
+import { ToolResultEntry } from './logEntries/ToolResultEntry';
+import { PlanEntry } from './logEntries/PlanEntry';
+import { AgentMessageEntry } from './logEntries/AgentMessageEntry';
 import { ReflectionIcon } from './icons/ReflectionIcon';
 import { ToolUseIcon } from './icons/ToolUseIcon';
 import { ReActIcon } from './icons/ReActIcon';
@@ -133,48 +138,15 @@ export const InteractionView: React.FC<InteractionViewProps> = ({ logEntries, is
       case 'system':
         return <EntryCard entry={entry}><p className="font-semibold text-purple-600 dark:text-purple-400">{entry.content}</p></EntryCard>;
       case 'thought':
-        return <EntryCard entry={entry}><div className="italic text-cyan-600 dark:text-cyan-400">Thought: {entry.content}</div></EntryCard>;
-      case 'action':
-        return <EntryCard entry={entry}><div><strong className="text-green-600 dark:text-green-400">Action:</strong> <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown></div></EntryCard>;
+        return <EntryCard entry={entry}><ThoughtEntry entry={entry} /></EntryCard>;
       case 'plan':
-        const planEntry = entry as PlanLogEntry;
-        return <EntryCard entry={entry}>
-          <strong className="text-yellow-600 dark:text-yellow-400">Plan Generated:</strong>
-          <ul className="list-disc list-inside mt-2 space-y-1">
-            {planEntry.steps.map((step, index) => <li key={index}>{step}</li>)}
-          </ul>
-        </EntryCard>;
+        return <EntryCard entry={entry}><PlanEntry entry={entry} /></EntryCard>;
       case 'tool-call':
-        return <EntryCard entry={entry}>
-          <div><strong className="text-blue-600 dark:text-blue-400">Using Tool:</strong> {entry.toolName}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 p-2 rounded">Input: {entry.input}</div>
-        </EntryCard>;
+        return <EntryCard entry={entry}><ToolCallEntry entry={entry} /></EntryCard>;
       case 'tool-result':
-        const toolResultEntry = entry as ToolResultLogEntry;
-        return <EntryCard entry={entry}>
-          <div><strong className="text-blue-600 dark:text-blue-400">Tool Result:</strong> {toolResultEntry.toolName}</div>
-           <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{toolResultEntry.output}</ReactMarkdown>
-          {toolResultEntry.sources && toolResultEntry.sources.length > 0 && (
-            <div className="mt-2">
-                <strong className="text-gray-500 dark:text-gray-400 text-sm">Sources:</strong>
-                <div className="flex flex-wrap gap-2 mt-1">
-                    {toolResultEntry.sources
-                      .filter(source => source.web?.uri)
-                      .map(source => (
-                        <a key={source.web.uri} href={source.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs bg-gray-200 dark:bg-gray-700 text-cyan-700 dark:text-cyan-400 hover:bg-gray-300 dark:hover:bg-gray-600 px-2 py-1 rounded-full transition-colors">
-                            {source.web.title || new URL(source.web.uri!).hostname}
-                        </a>
-                    ))}
-                </div>
-            </div>
-          )}
-        </EntryCard>;
+        return <EntryCard entry={entry}><ToolResultEntry entry={entry} /></EntryCard>;
       case 'agent-message':
-        const agentEntry = entry as AgentMessageLogEntry;
-        return <EntryCard entry={entry}>
-          <div><strong className="text-orange-500 dark:text-orange-400">{agentEntry.agentName}:</strong></div>
-          <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{agentEntry.content}</ReactMarkdown>
-        </EntryCard>;
+        return <EntryCard entry={entry}><AgentMessageEntry entry={entry} /></EntryCard>;
       case 'error':
         return <EntryCard entry={entry}><p className="font-semibold text-red-600 dark:text-red-400">{entry.content}</p></EntryCard>;
       default:

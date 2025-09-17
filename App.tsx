@@ -4,8 +4,9 @@ import { PatternSelector } from './components/PatternSelector';
 import { PromptInput } from './components/PromptInput';
 import { InteractionView } from './components/InteractionView';
 import { SettingsModal } from './components/SettingsModal';
+import { ConversationHistory } from './components/ConversationHistory';
 import { AgenticPattern, LogEntry } from './types';
-import { runAgenticPattern } from './services/geminiService';
+import { runAgenticPattern, getConversations, getConversation } from './services/geminiService';
 import { GlobalSettings, AllPatternSettings, DEFAULT_GLOBAL_SETTINGS, DEFAULT_PATTERN_SETTINGS } from './settings';
 
 interface PatternState {
@@ -81,6 +82,25 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleNewChat = () => {
+    // Reset the current pattern state
+    setPatternStates(prev => ({
+        ...prev,
+        [selectedPattern]: initialPatternState()
+    }));
+  };
+
+  const handleSelectConversation = async (conversationId: string) => {
+    const conversation = await getConversation(conversationId);
+    setPatternStates(prev => ({
+        ...prev,
+        [selectedPattern]: {
+            prompt: '',
+            logEntries: conversation.logEntries,
+        }
+    }));
+  };
+
   const streamCallback = useCallback((entry: LogEntry) => {
     setPatternStates(prev => {
         const currentEntries = prev[selectedPattern].logEntries;
@@ -136,25 +156,31 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans">
       <Header onOpenSettings={() => handleOpenSettings('global')} />
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-shrink-0">
-          <PatternSelector 
-            selectedPattern={selectedPattern} 
-            onSelectPattern={handlePatternSelect}
-            isLoading={isLoading}
-            onConfigurePattern={(pattern) => handleOpenSettings(pattern)}
-          />
-        </div>
-        <InteractionView logEntries={currentPatternState.logEntries} isLoading={isLoading} selectedPattern={selectedPattern} />
-        <div className="flex-shrink-0">
-          <PromptInput
-            prompt={currentPatternState.prompt}
-            onPromptChange={handlePromptChange}
-            onSubmit={handleSubmit}
-            isLoading={isLoading || apiKeyError}
-            selectedPattern={selectedPattern}
-          />
-        </div>
+      <div className="flex-1 flex min-h-0">
+        <ConversationHistory
+            onSelectConversation={handleSelectConversation}
+            onNewChat={handleNewChat}
+        />
+        <main className="flex-1 flex flex-col min-h-0">
+          <div className="flex-shrink-0">
+            <PatternSelector
+              selectedPattern={selectedPattern}
+              onSelectPattern={handlePatternSelect}
+              isLoading={isLoading}
+              onConfigurePattern={(pattern) => handleOpenSettings(pattern)}
+            />
+          </div>
+          <InteractionView logEntries={currentPatternState.logEntries} isLoading={isLoading} selectedPattern={selectedPattern} />
+          <div className="flex-shrink-0">
+            <PromptInput
+              prompt={currentPatternState.prompt}
+              onPromptChange={handlePromptChange}
+              onSubmit={handleSubmit}
+              isLoading={isLoading || apiKeyError}
+              selectedPattern={selectedPattern}
+            />
+          </div>
+        </main>
       </div>
       <SettingsModal
         isOpen={isSettingsOpen}
