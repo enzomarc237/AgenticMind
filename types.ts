@@ -86,3 +86,88 @@ export type LogEntry =
   | ToolResultLogEntry
   | AgentMessageLogEntry
   | ErrorLogEntry;
+
+// ============================================================================
+// Authentication and User Types
+// ============================================================================
+
+export interface UserProfile {
+  id: string
+  email: string
+  display_name: string | null
+  avatar_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UserSettings {
+  id: string
+  user_id: string
+  theme: 'light' | 'dark'
+  temperature: number
+  top_k: number
+  top_p: number
+  reflection_prompts: any
+  tool_use_prompts: any
+  react_prompts: any
+  planning_prompts: any
+  multi_agent_prompts: any
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================================
+// Conversation Types
+// ============================================================================
+
+export type AgenticPatternType = 'reflection' | 'tool_use' | 'react' | 'planning' | 'multi_agent'
+
+export interface Conversation {
+  id: string
+  user_id: string
+  folder_id: string | null
+  title: string
+  pattern: AgenticPatternType
+  is_favorite: boolean
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+  last_message_at: string
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  metadata: any
+  created_at: string
+}
+
+// ============================================================================
+// Organization Types
+// ============================================================================
+
+export interface Folder {
+  id: string
+  user_id: string
+  name: string
+  color: string | null
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Tag {
+  id: string
+  user_id: string
+  name: string
+  color: string | null
+  created_at: string
+}
+
+export interface ConversationTag {
+  conversation_id: string
+  tag_id: string
+  created_at: string
+}
